@@ -499,12 +499,18 @@ function setStatus(i, msg, cls = '') {
 }
 
 // ── BLE unlock flow ──────────────────────────────────────────
+
+// Koble fra og "glem" enheten – fikser at låsen ikke dukker opp igjen
+async function disconnectAndForget(device) {
+  try { if (device.gatt.connected) await device.gatt.disconnect(); } catch {}
+  try { await device.forget(); } catch {}  // Chrome 101+ – fjerner GATT-cache
+}
+
 async function unlock(index) {
   const tokens = loadTokens();
   const t = tokens[index];
   if (!t) return;
 
-  // Sjekk utløp lokalt før vi prøver BLE
   const expiry = parseExpiry(t.payload);
   if (expiry > 0 && expiry < Math.floor(Date.now() / 1000)) {
     setStatus(index, 'Token utløpt!', 'error');
@@ -519,80 +525,111 @@ async function unlock(index) {
 
   const btn = document.getElementById(`btn-${index}`);
   btn.disabled = true;
+  let device = null;
 
   try {
     setStatus(index, 'Søker etter lås…', 'working');
 
-    const device = await navigator.bluetooth.requestDevice({
+    device = await navigator.bluetooth.requestDevice({
       filters: [{ services: [SERVICE_UUID] }]
     });
 
-    setStatus(index, 'Kobler til…', 'working');
-    const server  = await device.gatt.connect();
-    const service = await server.getPrimaryService(SERVICE_UUID);
-    const mainChar   = await service.getCharacteristic(MAIN_CHAR);
+    device.addEventListener('gattserverdisconnected', () => {
+      if (device._intentionalDisconnect) return;
+      setStatus(index, 'Mistet tilkobling', 'error');
+    });
 
-    // Abonner på status-notifikasjoner fra ESP32
+    setStatus(index, 'Kobler til…', 'working');
+
+    // Prøv tilkobling – ved feil, vent og prøv én gang til
+    let server;
+    try {
+      server = await device.gatt.connect();
+    } catch {
+      setStatus(index, 'Prøver på nytt…', 'working');
+      await new Promise(r => setTimeout(r, 1000));
+      server = await device.gatt.connect();
+    }
+
+    const service  = await server.getPrimaryService(SERVICE_UUID);
+    const mainChar = await service.getCharacteristic(MAIN_CHAR);
+
     let statusChar;
     try {
       statusChar = await service.getCharacteristic(STATUS_CHAR);
       await statusChar.startNotifications();
       statusChar.addEventListener('characteristicvaluechanged', e => {
         const msg = new TextDecoder().decode(e.target.value);
-        handleESPStatus(index, msg);
+        handleESPStatus(index, msg, device);
       });
-    } catch { /* Gammel firmware uten status-char – fortsett likevel */ }
+    } catch {}
 
-    // Send token
     setStatus(index, 'Sender nøkkel…', 'working');
     const data = `${t.payload}|${t.signature}`;
     await mainChar.writeValue(new TextEncoder().encode(data));
 
-    // Vent på status (hvis ikke notifikasjoner, anta suksess etter 2s)
     if (!statusChar) {
-      setTimeout(() => {
-        setStatus(index, '✅ Åpnet!', 'open');
-        flashGreen();
-        pushLog({ action: 'unlock', name: t.name, payload: t.payload });
-        setTimeout(() => { device.gatt.disconnect(); setStatus(index, 'Klar'); }, 3500);
-      }, 1500);
+      await new Promise(r => setTimeout(r, 1500));
+      setStatus(index, '✅ Åpnet!', 'open');
+      flashGreen();
+      pushLog({ action: 'unlock', name: t.name, payload: t.payload });
+      await new Promise(r => setTimeout(r, 2000));
+      device._intentionalDisconnect = true;
+      await disconnectAndForget(device);
+      setStatus(index, 'Klar');
     } else {
-      // La notifikasjons-handleren ta seg av resten
-      setTimeout(() => {
-        if (device.gatt.connected) device.gatt.disconnect();
-      }, 6000);
+      // Sikkerhetsnett: koble alltid fra etter 8 sekunder
+      setTimeout(async () => {
+        if (device && device.gatt.connected) {
+          device._intentionalDisconnect = true;
+          await disconnectAndForget(device);
+        }
+      }, 8000);
     }
+
   } catch (err) {
     console.error(err);
-    const msg = err.name === 'NotFoundError' ? 'Ingen lås funnet' :
-                err.name === 'NetworkError'  ? 'Tilkobling feilet' : 'Feil: ' + err.message;
+    const msg = err.name === 'NotFoundError'    ? 'Ingen lås funnet – prøv igjen' :
+                err.name === 'NetworkError'      ? 'Tilkobling feilet – er ESP32 på?' :
+                err.name === 'NotSupportedError' ? 'BLE ikke støttet i denne nettleseren' :
+                'Feil: ' + err.message;
     setStatus(index, msg, 'error');
     toast('⚠️ ' + msg);
+    if (device) { device._intentionalDisconnect = true; await disconnectAndForget(device); }
   } finally {
     btn.disabled = false;
   }
 }
 
-function handleESPStatus(index, status) {
+function handleESPStatus(index, status, device) {
   const map = {
-    'OPEN':        ['✅ Åpnet!',          'open'],
-    'CLOSED':      ['🔒 Klar',           ''],
-    'READY':       ['Klar',              ''],
-    'VERIFYING':   ['Verifiserer…',      'working'],
-    'INVALID_SIG': ['❌ Ugyldig signatur','error'],
-    'EXPIRED':     ['⏰ Utløpt',         'error'],
-    'WRONG_LOCK':  ['❌ Feil lås-ID',    'error'],
-    'FORMAT_ERR':  ['❌ Formatfeil',     'error'],
-    'TIME_OK':     ['⏱ Tid synkronisert',''],
-    'TIME_ERR':    ['❌ Tidsfeil',       'error'],
+    'OPEN':        ['✅ Åpnet!',           'open'],
+    'CLOSED':      ['🔒 Klar',            ''],
+    'READY':       ['Klar',               ''],
+    'VERIFYING':   ['Verifiserer…',       'working'],
+    'INVALID_SIG': ['❌ Ugyldig signatur', 'error'],
+    'EXPIRED':     ['⏰ Utløpt',          'error'],
+    'WRONG_LOCK':  ['❌ Feil lås-ID',     'error'],
+    'FORMAT_ERR':  ['❌ Formatfeil',      'error'],
+    'TIME_OK':     ['⏱ Tid synkronisert', ''],
+    'TIME_ERR':    ['❌ Tidsfeil',        'error'],
   };
   const [msg, cls] = map[status] || ['Status: ' + status, ''];
   setStatus(index, msg, cls);
+
   if (status === 'OPEN') {
     flashGreen();
     const tokens = loadTokens();
-    pushLog({ action: 'unlock', name: tokens[index]?.name, payload: tokens[index]?.payload, esp_status: status });
+    pushLog({ action: 'unlock', name: tokens[index]?.name, payload: tokens[index]?.payload });
     renderLog();
+  }
+
+  // Koble fra og glem etter svar – dette er nøkkelen til at neste trykk fungerer
+  if (['CLOSED','INVALID_SIG','EXPIRED','WRONG_LOCK','FORMAT_ERR'].includes(status)) {
+    setTimeout(async () => {
+      if (device) { device._intentionalDisconnect = true; await disconnectAndForget(device); }
+      if (status === 'CLOSED') setStatus(index, 'Klar');
+    }, 500);
   }
 }
 
