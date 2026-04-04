@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>SmartLock Admin</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+    :root {
+      --bg:      #0a0a0f;
+      --surface: #12121a;
+      --border:  #1e1e2e;
+      --accent:  #4ade80;
+      --accent2: #22d3ee;
+      --danger:  #f87171;
+      --warn:    #fbbf24;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+      --mono:    'Space Mono', monospace;
+      --sans:    'DM Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    }
+
+    #app { position: relative; z-index: 1; }
+
+    /* ── Layout ── */
+    .layout { display: grid; grid-template-columns: 200px 1fr; min-height: 100vh; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .logo {
+      font-family: var(--mono); font-size: 14px; color: var(--accent);
+      letter-spacing: .12em; text-transform: uppercase;
+      padding: 24px 20px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo small { display: block; font-size: 9px; color: var(--muted); margin-top: 3px; letter-spacing: .2em; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px; cursor: pointer;
+      font-size: 13px; font-weight: 500; color: var(--muted);
+      border-left: 2px solid transparent;
+      transition: all .2s;
+    }
+    .nav-item:hover { color: var(--text); background: #ffffff06; }
+    .nav-item.active { color: var(--accent); border-left-color: var(--accent); background: #4ade8010; }
+
+    .sidebar-bottom {
+      margin-top: auto; padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Main ── */
+    .main { padding: 32px 36px; }
+    .page-title { font-family: var(--mono); font-size: 20px; color: var(--accent); margin-bottom: 4px; }
+    .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; overflow: hidden; margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-family: var(--mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+
+    /* ── Table ── */
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; padding: 11px 20px; font-family: var(--mono); font-weight: 400; }
+    td { padding: 13px 20px; font-size: 13px; border-top: 1px solid var(--border)60; }
+    tbody tr:hover td { background: #ffffff04; }
+
+    /* ── Badges ── */
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-family: var(--mono); font-size: 10px; }
+    .badge-green  { background: #4ade8015; color: var(--accent);  border: 1px solid #4ade8030; }
+    .badge-cyan   { background: #22d3ee15; color: var(--accent2); border: 1px solid #22d3ee30; }
+    .badge-red    { background: #f8717115; color: var(--danger);  border: 1px solid #f8717130; }
+    .badge-gray   { background: var(--border); color: var(--muted); }
+
+    /* ── Buttons ── */
+    button { cursor: pointer; border: none; font-family: var(--sans); transition: all .2s; }
+
+    .btn-green {
+      background: linear-gradient(135deg, #166534, #15803d);
+      color: #dcfce7; border: 1px solid #22c55e44;
+      border-radius: 10px; padding: 9px 16px;
+      font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    }
+    .btn-green:hover { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
+    .btn-green:active { transform: none; }
+    .btn-green:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .btn-ghost { background: var(--border); color: var(--text); border: 1px solid var(--border); border-radius: 9px; padding: 7px 13px; font-size: 12px; font-weight: 500; }
+    .btn-ghost:hover { background: #243050; }
+
+    .btn-danger { background: #f8717112; color: var(--danger); border: 1px solid #f8717130; border-radius: 9px; padding: 6px 12px; font-size: 12px; }
+    .btn-danger:hover { background: #f8717122; }
+
+    .btn-full { width: 100%; padding: 13px; border-radius: 11px; font-size: 14px; font-weight: 600; margin-top: 6px; }
+
+    /* ── Modal ── */
+    .overlay {
+      position: fixed; inset: 0; background: #00000088;
+      backdrop-filter: blur(6px); z-index: 100;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 22px; padding: 28px; width: 100%; max-width: 460px;
+      animation: popIn .2s ease;
+    }
+    @keyframes popIn { from { opacity:0; transform:scale(.95) translateY(8px); } to { opacity:1; transform:none; } }
+    .modal-title { font-family: var(--mono); font-size: 15px; margin-bottom: 20px; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+    /* ── Form ── */
+    .field { margin-bottom: 14px; }
+    .field label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; }
+    .field input, .field select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 9px; padding: 10px 13px;
+      color: var(--text); font-family: var(--sans); font-size: 14px;
+      outline: none; transition: border-color .2s;
+    }
+    .field input:focus, .field select:focus { border-color: var(--accent2); }
+    .field select option { background: var(--surface); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ── Login ── */
+    .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; padding: 40px; width: 100%; max-width: 380px; }
+    .login-logo { font-family: var(--mono); font-size: 20px; color: var(--accent); text-align: center; margin-bottom: 4px; letter-spacing: .1em; }
+    .login-sub { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 28px; }
+
+    /* ── Empty ── */
+    .empty { text-align: center; padding: 50px 20px; color: var(--muted); }
+    .empty-icon { font-size: 40px; opacity: .3; margin-bottom: 10px; }
+    .empty p { font-size: 13px; line-height: 1.7; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 13px 18px; font-size: 13px;
+      z-index: 200; animation: slideIn .3s ease;
+      box-shadow: 0 8px 24px #00000050;
+    }
+    @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:none; } }
+
+    /* ── Error ── */
+    .err { background: #f8717112; border: 1px solid #f8717130; border-radius: 9px; padding: 10px 13px; font-size: 13px; color: var(--danger); margin-bottom: 14px; }
+
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  KONFIGURASJON
+//  Endre BACKEND_URL til adressen der PocketBase kjører
+// ════════════════════════════════════════════════════════════
+const BACKEND_URL = 'http://127.0.0.1:8090'; // Lokalt
+// const BACKEND_URL = 'https://din-server.no';  // Produksjon
+
+// ── State ────────────────────────────────────────────────────
+let state = {
+  token: localStorage.getItem('admin_token') || null,
+  adminId: localStorage.getItem('admin_id') || null,
+  page: 'dashboard',
+  modal: null,
+  toast: null,
+  data: { locks: [], users: [], access: [], log: [] },
+};
+
+// ── API ──────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (state.token) opts.headers['Authorization'] = `Bearer ${state.token}`;
+  if (body) opts.body = JSON.stringify(body);
+
+  const res = await fetch(`${BACKEND_URL}/api/${path}`, opts);
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) throw new Error(json.message || 'API-feil');
+  return json;
+}
+
+// ── Auth ─────────────────────────────────────────────────────
+async function login(email, password) {
+  const data = await api('POST', 'admins/auth-with-password', { identity: email, password });
+  state.token   = data.token;
+  state.adminId = data.admin?.id;
+  localStorage.setItem('admin_token', data.token);
+  localStorage.setItem('admin_id', data.admin?.id);
+  render();
+}
+
+async function logout() {
+  state.token = null; state.adminId = null;
+  localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_id');
+  render();
+}
+
+// ── Data fetching ─────────────────────────────────────────────
+async function loadAll() {
+  try {
+    const [locks, users, access] = await Promise.all([
+      api('GET', 'collections/locks/records?sort=-created&perPage=200'),
+      api('GET', 'collections/users/records?sort=-created&perPage=200'),
+      api('GET', 'collections/access/records?expand=user,lock&sort=-created&perPage=200'),
+    ]);
+    state.data.locks  = locks.items  || [];
+    state.data.users  = users.items  || [];
+    state.data.access = access.items || [];
+    render();
+  } catch(e) {
+    showToast('Feil: ' + e.message);
+  }
+}
+
+async function loadLog() {
+  try {
+    const log = await api('GET', 'collections/activity_log/records?expand=user,lock&sort=-created&perPage=100');
+    state.data.log = log.items || [];
+    render();
+  } catch(e) { state.data.log = []; render(); }
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function showToast(msg) {
+  state.toast = msg; render();
+  setTimeout(() => { state.toast = null; render(); }, 3000);
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function fmt(ts) {
+  if (!ts) return '–';
+  return new Date(ts).toLocaleString('nb-NO', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+function fmtDate(ts) {
+  if (!ts) return '–';
+  return new Date(ts).toLocaleDateString('nb-NO');
+}
+function isExp(ts) { return ts && new Date(ts) < new Date(); }
+
+// ── CRUD ─────────────────────────────────────────────────────
+
+// Locks
+async function createLock(form) {
+  await api('POST', 'collections/locks/records', form);
+  showToast('✓ Lås opprettet'); state.modal = null; loadAll();
+}
+async function updateLock(id, form) {
+  await api('PATCH', `collections/locks/records/${id}`, form);
+  showToast('✓ Lås oppdatert'); state.modal = null; loadAll();
+}
+async function deleteLock(id) {
+  if (!confirm('Slette denne låsen?')) return;
+  await api('DELETE', `collections/locks/records/${id}`);
+  showToast('Lås slettet'); loadAll();
+}
+
+// Users
+async function createUser(form) {
+  await api('POST', 'collections/users/records', {
+    ...form,
+    passwordConfirm: form.password,
+    emailVisibility: true,
+  });
+  showToast('✓ Bruker opprettet'); state.modal = null; loadAll();
+}
+async function deleteUser(id) {
+  if (!confirm('Slette denne brukeren?')) return;
+  await api('DELETE', `collections/users/records/${id}`);
+  showToast('Bruker slettet'); loadAll();
+}
+
+// Access
+async function createAccess(form) {
+  await api('POST', 'collections/access/records', { ...form, active: true });
+  showToast('✓ Tilgang tildelt'); state.modal = null; loadAll();
+}
+async function revokeAccess(id) {
+  if (!confirm('Trekke tilbake tilgangen?')) return;
+  await api('PATCH', `collections/access/records/${id}`, { active: false });
+  showToast('Tilgang tilbakekalt'); loadAll();
+}
+
+// ── Render helpers ────────────────────────────────────────────
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([k, v]) => {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2).toLowerCase(), v);
+    else e.setAttribute(k, v);
+  });
+  children.flat().forEach(c => {
+    if (c == null) return;
+    e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+  });
+  return e;
+}
+function h(html) { const d = document.createElement('div'); d.innerHTML = html; return d.firstChild; }
+
+// ── Pages ─────────────────────────────────────────────────────
+
+function renderLogin() {
+  const wrap = el('div', { class: 'login-wrap' });
+  const box  = el('div', { class: 'login-box fade-in' });
+  const err  = el('div', { id: 'login-err' });
+
+  box.appendChild(h(`<div class="login-logo">Smart<span style="color:var(--muted)">Lock</span></div>`));
+  box.appendChild(h(`<div class="login-sub">ADMIN · TILGANGSSTYRING</div>`));
+  box.appendChild(err);
+
+  const emailInp = h(`<div class="field"><label>E-post</label><input type="email" placeholder="admin@eksempel.no" autocomplete="email"></div>`);
+  const passInp  = h(`<div class="field"><label>Passord</label><input type="password" placeholder="••••••••"></div>`);
+  box.appendChild(emailInp);
+  box.appendChild(passInp);
+
+  const btn = el('button', { class: 'btn-green btn-full', style: 'margin-top:16px' }, 'LOGG INN →');
+  btn.addEventListener('click', async () => {
+    const email = emailInp.querySelector('input').value;
+    const pass  = passInp.querySelector('input').value;
+    btn.disabled = true; btn.textContent = '···';
+    try {
+      await login(email, pass);
+    } catch(e) {
+      err.innerHTML = `<div class="err">${e.message}</div>`;
+      btn.disabled = false; btn.textContent = 'LOGG INN →';
+    }
+  });
+  box.appendChild(btn);
+  wrap.appendChild(box);
+  return wrap;
+}
+
+function renderDashboard() {
+  const { locks, users, access } = state.data;
+  const active = access.filter(a => a.active && !isExp(a.valid_until));
+  const div = el('div', { class: 'fade-in' });
+
+  div.appendChild(h(`<div class="page-title">Dashboard</div><div class="page-sub">Oversikt</div>`));
+
+  // Stats
+  const stats = el('div', { style: 'display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px' });
+  [
+    ['🔒', locks.length, 'Låser'],
+    ['👤', users.length, 'Brukere'],
+    ['🔑', active.length, 'Aktive tilganger'],
+  ].forEach(([icon, val, lbl]) => {
+    stats.appendChild(h(`
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px;position:relative;overflow:hidden">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),transparent);opacity:.4"></div>
+        <div style="font-size:22px;margin-bottom:10px;opacity:.7">${icon}</div>
+        <div style="font-family:var(--mono);font-size:28px;color:var(--accent);font-weight:700;line-height:1;margin-bottom:4px">${val}</div>
+        <div style="font-size:12px;color:var(--muted)">${lbl}</div>
+      </div>`));
+  });
+  div.appendChild(stats);
+
+  // Recent access
+  div.appendChild(h(`
+    <div class="card">
+      <div class="card-header"><span class="card-title">Aktive tilganger</span></div>
+      ${active.length === 0
+        ? `<div class="empty"><div class="empty-icon">🔑</div><p>Ingen aktive tilganger</p></div>`
+        : `<table>
+            <thead><tr><th>Bruker</th><th>Lås</th><th>Gyldig til</th></tr></thead>
+            <tbody>${active.slice(0,8).map(a => `
+              <tr>
+                <td>${a.expand?.user?.name || a.expand?.user?.email || '–'}</td>
+                <td>${a.expand?.lock?.name || '–'}</td>
+                <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${fmtDate(a.valid_until)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>`}
+    </div>`));
+
+  return div;
+}
+
+function renderLocks() {
+  const { locks } = state.data;
+  const div = el('div', { class: 'fade-in' });
+  div.appendChild(h(`<div class="page-title">Låser</div><div class="page-sub">ESP32-låser i systemet</div>`));
+
+  const toolbar = el('div', { style: 'display:flex;justify-content:flex-end;margin-bottom:16px' });
+  const addBtn  = el('button', { class: 'btn-green' }, '+ Ny lås');
+  addBtn.addEventListener('click', () => openLockModal());
+  toolbar.appendChild(addBtn);
+  div.appendChild(toolbar);
+
+  const card = el('div', { class: 'card' });
+  card.appendChild(h(`<div class="card-header"><span class="card-title">${locks.length} lås${locks.length!==1?'er':''}</span></div>`));
+
+  if (locks.length === 0) {
+    card.appendChild(h(`<div class="empty"><div class="empty-icon">🔒</div><p>Ingen låser ennå.<br>Trykk "+ Ny lås" for å legge til.</p></div>`));
+  } else {
+    const table = el('div');
+    table.innerHTML = `<table>
+      <thead><tr><th>Navn</th><th>Lock-ID</th><th>Lokasjon</th><th></th></tr></thead>
+      <tbody>${locks.map(l => `
+        <tr>
+          <td style="font-weight:600">${l.name}</td>
+          <td><span class="badge badge-gray">${l.lock_id}</span></td>
+          <td style="color:var(--muted);font-size:12px">${l.location||'–'}</td>
+          <td style="display:flex;gap:8px">
+            <button class="btn-ghost" data-edit="${l.id}">Rediger</button>
+            <button class="btn-danger" data-del="${l.id}">Slett</button>
+          </td>
+        </tr>`).join('')}
+      </tbody></table>`;
+    table.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openLockModal(locks.find(l => l.id === b.dataset.edit))));
+    table.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => deleteLock(b.dataset.del)));
+    card.appendChild(table);
+  }
+  div.appendChild(card);
+  return div;
+}
+
+function renderUsers() {
+  const { users } = state.data;
+  const div = el('div', { class: 'fade-in' });
+  div.appendChild(h(`<div class="page-title">Brukere</div><div class="page-sub">Administrer brukere</div>`));
+
+  const toolbar = el('div', { style: 'display:flex;justify-content:flex-end;margin-bottom:16px' });
+  const addBtn  = el('button', { class: 'btn-green' }, '+ Ny bruker');
+  addBtn.addEventListener('click', () => openUserModal());
+  toolbar.appendChild(addBtn);
+  div.appendChild(toolbar);
+
+  const card = el('div', { class: 'card' });
+  card.appendChild(h(`<div class="card-header"><span class="card-title">${users.length} bruker${users.length!==1?'e':''}</span></div>`));
+
+  if (users.length === 0) {
+    card.appendChild(h(`<div class="empty"><div class="empty-icon">👤</div><p>Ingen brukere ennå.<br>Trykk "+ Ny bruker" for å legge til.</p></div>`));
+  } else {
+    const table = el('div');
+    table.innerHTML = `<table>
+      <thead><tr><th>Navn</th><th>E-post</th><th>Opprettet</th><th></th></tr></thead>
+      <tbody>${users.map(u => `
+        <tr>
+          <td style="font-weight:600">${u.name||'–'}</td>
+          <td style="color:var(--muted);font-size:12px">${u.email}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${fmtDate(u.created)}</td>
+          <td><button class="btn-danger" data-del="${u.id}">Slett</button></td>
+        </tr>`).join('')}
+      </tbody></table>`;
+    table.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => deleteUser(b.dataset.del)));
+    card.appendChild(table);
+  }
+  div.appendChild(card);
+  return div;
+}
+
+function renderAccess() {
+  const { access, users, locks } = state.data;
+  const div = el('div', { class: 'fade-in' });
+  div.appendChild(h(`<div class="page-title">Tilganger</div><div class="page-sub">Hvem har tilgang til hvilke låser</div>`));
+
+  const toolbar = el('div', { style: 'display:flex;justify-content:flex-end;margin-bottom:16px' });
+  const addBtn  = el('button', { class: 'btn-green' }, '+ Tildel tilgang');
+  addBtn.addEventListener('click', () => openAccessModal());
+  toolbar.appendChild(addBtn);
+  div.appendChild(toolbar);
+
+  const card = el('div', { class: 'card' });
+  card.appendChild(h(`<div class="card-header"><span class="card-title">${access.length} tilgang${access.length!==1?'er':''}</span></div>`));
+
+  if (access.length === 0) {
+    card.appendChild(h(`<div class="empty"><div class="empty-icon">🔑</div><p>Ingen tilganger ennå.</p></div>`));
+  } else {
+    const table = el('div');
+    table.innerHTML = `<table>
+      <thead><tr><th>Bruker</th><th>Lås</th><th>Gyldig til</th><th>Status</th><th></th></tr></thead>
+      <tbody>${access.map(a => {
+        const exp    = isExp(a.valid_until);
+        const active = a.active && !exp;
+        const badge  = active
+          ? `<span class="badge badge-green">Aktiv</span>`
+          : exp ? `<span class="badge badge-red">Utløpt</span>`
+                : `<span class="badge badge-gray">Tilbakekalt</span>`;
+        return `<tr>
+          <td>
+            <div style="font-weight:600">${a.expand?.user?.name || a.expand?.user?.email || '–'}</div>
+            <div style="font-size:11px;color:var(--muted)">${a.expand?.user?.email||''}</div>
+          </td>
+          <td>${a.expand?.lock?.name||'–'}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:${exp?'var(--danger)':'var(--muted)'}">${fmtDate(a.valid_until)}</td>
+          <td>${badge}</td>
+          <td>${active ? `<button class="btn-danger" data-rev="${a.id}">Tilbakekall</button>` : ''}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`;
+    table.querySelectorAll('[data-rev]').forEach(b => b.addEventListener('click', () => revokeAccess(b.dataset.rev)));
+    card.appendChild(table);
+  }
+  div.appendChild(card);
+  return div;
+}
+
+function renderLog() {
+  const { log } = state.data;
+  const div = el('div', { class: 'fade-in' });
+  div.appendChild(h(`<div class="page-title">Aktivitetslogg</div><div class="page-sub">Opplåsinger og hendelser</div>`));
+
+  const card = el('div', { class: 'card' });
+  card.appendChild(h(`<div class="card-header"><span class="card-title">${log.length} hendelse${log.length!==1?'r':''}</span></div>`));
+
+  if (log.length === 0) {
+    card.appendChild(h(`<div class="empty"><div class="empty-icon">📋</div><p>Ingen aktivitet ennå</p></div>`));
+  } else {
+    const table = el('div');
+    table.innerHTML = `<table>
+      <thead><tr><th>Handling</th><th>Bruker</th><th>Lås</th><th>Tidspunkt</th></tr></thead>
+      <tbody>${log.map(l => `
+        <tr>
+          <td><span class="badge ${l.action==='unlock'?'badge-green':'badge-cyan'}">${l.action}</span></td>
+          <td style="font-size:12px">${l.expand?.user?.email||'–'}</td>
+          <td style="font-size:12px">${l.expand?.lock?.name||'–'}</td>
+          <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${fmt(l.created)}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+    card.appendChild(table);
+  }
+  div.appendChild(card);
+  return div;
+}
+
+// ── Modals ────────────────────────────────────────────────────
+
+function openLockModal(lock = null) {
+  const modal = el('div', { class: 'overlay' });
+  const box   = el('div', { class: 'modal' });
+  box.appendChild(h(`<div class="modal-title">${lock ? 'Rediger lås' : 'Ny lås'}</div>`));
+
+  const nameF    = h(`<div class="field"><label>Navn</label><input type="text" value="${lock?.name||''}" placeholder="Hoveddør"></div>`);
+  const lockIdF  = h(`<div class="field"><label>Lock-ID (må matche LOCK_ID i ESP32)</label><input type="text" value="${lock?.lock_id||''}" placeholder="hoveddor" style="font-family:var(--mono)"></div>`);
+  const locationF= h(`<div class="field"><label>Lokasjon (valgfritt)</label><input type="text" value="${lock?.location||''}" placeholder="1. etasje"></div>`);
+
+  box.appendChild(nameF); box.appendChild(lockIdF); box.appendChild(locationF);
+
+  const footer = el('div', { class: 'modal-footer' });
+  const cancel = el('button', { class: 'btn-ghost' }, 'Avbryt');
+  const save   = el('button', { class: 'btn-green' }, lock ? 'Lagre' : 'Opprett');
+
+  cancel.addEventListener('click', () => modal.remove());
+  save.addEventListener('click', async () => {
+    const form = {
+      name:     nameF.querySelector('input').value,
+      lock_id:  lockIdF.querySelector('input').value,
+      location: locationF.querySelector('input').value,
+    };
+    if (!form.name || !form.lock_id) { showToast('Fyll inn navn og Lock-ID'); return; }
+    save.disabled = true; save.textContent = '···';
+    try {
+      lock ? await updateLock(lock.id, form) : await createLock(form);
+      modal.remove();
+    } catch(e) { showToast('Feil: ' + e.message); save.disabled = false; save.textContent = 'Lagre'; }
+  });
+
+  footer.appendChild(cancel); footer.appendChild(save);
+  box.appendChild(footer);
+  modal.appendChild(box);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  nameF.querySelector('input').focus();
+}
+
+function openUserModal() {
+  const modal = el('div', { class: 'overlay' });
+  const box   = el('div', { class: 'modal' });
+  box.appendChild(h(`<div class="modal-title">Ny bruker</div>`));
+
+  const nameF  = h(`<div class="field"><label>Fullt navn</label><input type="text" placeholder="Ola Nordmann"></div>`);
+  const emailF = h(`<div class="field"><label>E-post</label><input type="email" placeholder="ola@eksempel.no"></div>`);
+  const passF  = h(`<div class="field"><label>Passord</label><input type="password" placeholder="Minst 8 tegn"></div>`);
+
+  box.appendChild(nameF); box.appendChild(emailF); box.appendChild(passF);
+
+  const footer = el('div', { class: 'modal-footer' });
+  const cancel = el('button', { class: 'btn-ghost' }, 'Avbryt');
+  const save   = el('button', { class: 'btn-green' }, 'Opprett bruker');
+
+  cancel.addEventListener('click', () => modal.remove());
+  save.addEventListener('click', async () => {
+    const form = {
+      name:     nameF.querySelector('input').value,
+      email:    emailF.querySelector('input').value,
+      password: passF.querySelector('input').value,
+    };
+    if (!form.name || !form.email || !form.password) { showToast('Fyll inn alle feltene'); return; }
+    if (form.password.length < 8) { showToast('Passordet må være minst 8 tegn'); return; }
+    save.disabled = true; save.textContent = '···';
+    try {
+      await createUser(form);
+      modal.remove();
+    } catch(e) { showToast('Feil: ' + e.message); save.disabled = false; save.textContent = 'Opprett bruker'; }
+  });
+
+  footer.appendChild(cancel); footer.appendChild(save);
+  box.appendChild(footer);
+  modal.appendChild(box);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+  nameF.querySelector('input').focus();
+}
+
+function openAccessModal() {
+  const { users, locks } = state.data;
+  if (!users.length) { showToast('Opprett minst én bruker først'); return; }
+  if (!locks.length) { showToast('Opprett minst én lås først'); return; }
+
+  const modal = el('div', { class: 'overlay' });
+  const box   = el('div', { class: 'modal' });
+  box.appendChild(h(`<div class="modal-title">Tildel tilgang</div>`));
+
+  const userF = h(`<div class="field"><label>Bruker</label><select>
+    <option value="">Velg bruker…</option>
+    ${users.map(u => `<option value="${u.id}">${u.name||u.email} — ${u.email}</option>`).join('')}
+  </select></div>`);
+
+  const lockF = h(`<div class="field"><label>Lås</label><select>
+    <option value="">Velg lås…</option>
+    ${locks.map(l => `<option value="${l.id}">${l.name} (${l.lock_id})</option>`).join('')}
+  </select></div>`);
+
+  const in30 = new Date(Date.now() + 30*86400000).toISOString().slice(0,16);
+  const dateF = h(`<div class="field"><label>Gyldig til</label><input type="datetime-local" value="${in30}"></div>`);
+
+  box.appendChild(userF); box.appendChild(lockF); box.appendChild(dateF);
+
+  const footer = el('div', { class: 'modal-footer' });
+  const cancel = el('button', { class: 'btn-ghost' }, 'Avbryt');
+  const save   = el('button', { class: 'btn-green' }, 'Tildel tilgang');
+
+  cancel.addEventListener('click', () => modal.remove());
+  save.addEventListener('click', async () => {
+    const user_id     = userF.querySelector('select').value;
+    const lock_id     = lockF.querySelector('select').value;
+    const valid_until = dateF.querySelector('input').value;
+    if (!user_id || !lock_id || !valid_until) { showToast('Fyll inn alle feltene'); return; }
+    save.disabled = true; save.textContent = '···';
+    try {
+      await createAccess({ user: user_id, lock: lock_id, valid_until: new Date(valid_until).toISOString() });
+      modal.remove();
+    } catch(e) { showToast('Feil: ' + e.message); save.disabled = false; save.textContent = 'Tildel tilgang'; }
+  });
+
+  footer.appendChild(cancel); footer.appendChild(save);
+  box.appendChild(footer);
+  modal.appendChild(box);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
+// ── Main render ───────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+
+  // Toast
+  if (state.toast) {
+    app.appendChild(h(`<div class="toast">${state.toast}</div>`));
+  }
+
+  // Login
+  if (!state.token) {
+    app.appendChild(renderLogin());
+    return;
+  }
+
+  // App layout
+  const layout  = el('div', { class: 'layout' });
+  const sidebar = el('aside', { class: 'sidebar' });
+  const main    = el('main', { class: 'main' });
+
+  // Sidebar logo
+  sidebar.appendChild(h(`<div class="logo">Smart<span style="color:var(--muted)">Lock</span><small>ADMINISTRASJON</small></div>`));
+
+  // Nav
+  const nav = [
+    ['dashboard', '◈', 'Dashboard'],
+    ['locks',     '◎', 'Låser'],
+    ['users',     '◉', 'Brukere'],
+    ['access',    '◆', 'Tilganger'],
+    ['log',       '≡', 'Aktivitetslogg'],
+  ];
+  nav.forEach(([id, icon, label]) => {
+    const item = el('div', { class: `nav-item ${state.page === id ? 'active' : ''}` },
+      h(`<span style="font-family:var(--mono);font-size:13px;width:18px;text-align:center">${icon}</span>`),
+      label
+    );
+    item.addEventListener('click', () => {
+      state.page = id;
+      if (id === 'log') loadLog();
+      else render();
+    });
+    sidebar.appendChild(item);
+  });
+
+  // Sidebar bottom
+  const bottom = el('div', { class: 'sidebar-bottom' });
+  const logoutBtn = el('button', { class: 'btn-ghost', style: 'width:100%' }, 'Logg ut');
+  logoutBtn.addEventListener('click', logout);
+  bottom.appendChild(logoutBtn);
+  sidebar.appendChild(bottom);
+
+  // Page content
+  const pages = {
+    dashboard: renderDashboard,
+    locks:     renderLocks,
+    users:     renderUsers,
+    access:    renderAccess,
+    log:       renderLog,
+  };
+  main.appendChild((pages[state.page] || renderDashboard)());
+
+  layout.appendChild(sidebar);
+  layout.appendChild(main);
+  app.appendChild(layout);
+}
+
+// ── Init ──────────────────────────────────────────────────────
+render();
+if (state.token) loadAll();
+</script>
+</body>
+</html>
